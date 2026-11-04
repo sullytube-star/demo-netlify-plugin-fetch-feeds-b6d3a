@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<!-- saved from url=(0038)https://artifacts.grokusercontent.com/ -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inner Iframe Creator</title>
+    <style>
+        html {
+            height: 100%;
+        }
+        body {
+            margin: 0;
+            height: 100%;
+            padding: 0px;
+        }
+        #innerIframe {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border-width: 0;
+        }
+    </style>
+<link rel="stylesheet" href="chrome-extension://jmnhicbkdlfeaimeidnpbbmgbgfobpel/app/content-style.css"></head>
+<body>
+    <iframe id="innerIframe" sandbox="allow-scripts allow-pointer-lock" allow="pointer-lock" src="./saved_resource.html"></iframe>
+    <script>
+        // Pointer-lock notification script injected into artifact HTML.
+        // Listens for pointerlockchange/error inside the inner iframe and
+        // posts to window.parent (the CF worker host page), which then
+        // forwards it up to grok.com so event.source matches correctly.
+        var POINTER_LOCK_SCRIPT = '<scr' + 'ipt>'
+            + '(function(){'
+            +   'function n(a){try{window.parent.postMessage(JSON.stringify({type:"pointerlock",active:a}),"*")}catch(e){}}'
+            +   'document.addEventListener("pointerlockchange",function(){n(document.pointerLockElement!==null)});'
+            +   'document.addEventListener("pointerlockerror",function(){n(false)});'
+            + '})();'
+            + '</scr' + 'ipt>';
+
+        // Console-forwarding script injected into artifact HTML.
+        // Same pattern: post to window.parent so the forwarder relays it.
+        // Uses Object.defineProperty to make hooks harder to bypass.
+        var CONSOLE_SCRIPT = '<scr' + 'ipt>'
+            + '(function(){'
+            +   'function s(l,m){try{window.parent.postMessage(JSON.stringify({type:"console_message",level:l,message:String(m)}),"*")}catch(e){}}'
+            +   'var _l=console.log,_w=console.warn,_e=console.error;'
+            +   'try{'
+            +     'Object.defineProperty(console,"log",{value:function(){s("log",Array.from(arguments).join(" "));return _l.apply(console,arguments)},writable:false,configurable:false});'
+            +     'Object.defineProperty(console,"warn",{value:function(){s("warn",Array.from(arguments).join(" "));return _w.apply(console,arguments)},writable:false,configurable:false});'
+            +     'Object.defineProperty(console,"error",{value:function(){s("error",Array.from(arguments).join(" "));return _e.apply(console,arguments)},writable:false,configurable:false});'
+            +   '}catch(e){'
+            +     'console.log=function(){s("log",Array.from(arguments).join(" "));return _l.apply(console,arguments)};'
+            +     'console.warn=function(){s("warn",Array.from(arguments).join(" "));return _w.apply(console,arguments)};'
+            +     'console.error=function(){s("error",Array.from(arguments).join(" "));return _e.apply(console,arguments)};'
+            +   '}'
+            +   'window.onerror=function(m){s("error",m)};'
+            + '})();'
+            + '</scr' + 'ipt>';
+
+        var INJECTION_MARKER = '<!-- __grok_injected__ -->';
+
+        function wrapHtml(html) {
+            var result = html || '';
+            // Skip if we've already wrapped this HTML (e.g. re-injection)
+            if (result.indexOf('__grok_injected__') !== -1) {
+                return result;
+            }
+            result = INJECTION_MARKER
+                + '<style>body{margin:0}</style>'
+                + POINTER_LOCK_SCRIPT
+                + CONSOLE_SCRIPT
+                + result;
+            return result;
+        }
+
+        // Track the parent origin from the first valid message we receive,
+        // so we can forward messages with a specific target instead of '*'.
+        var parentOrigin = null;
+
+        window.addEventListener('message', function(event) {
+            // Only accept HTML injection messages from the parent (grok.com).
+            // Messages from the inner iframe are handled by the forwarder below.
+            if (event.source !== window.parent) {
+                return;
+            }
+
+            if (event.data &&  event.data.type === 'html') {
+                parentOrigin = event.origin;
+                var iframe = document.getElementById('innerIframe');
+                iframe.setAttribute('srcDoc', wrapHtml(event.data.html));
+                iframe.focus();
+            }
+        });
+
+        // Forward messages from the inner iframe to the parent (grok.com)
+        // so pointer-lock state & console messages bubble up.
+        window.addEventListener('message', function(event) {
+            var iframe = document.getElementById('innerIframe');
+            if (event.source !== (iframe && iframe.contentWindow)) {
+                return;
+            }
+            if (!parentOrigin) {
+                return;
+            }
+            try {
+                var data = JSON.parse(event.data);
+                if (data && (data.type === 'pointerlock' || data.type === 'console_message')) {
+                    window.parent.postMessage(event.data, parentOrigin);
+                }
+            } catch(e) {}
+        });
+    </script>
+<script defer="" src="./v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon="{&quot;version&quot;:&quot;2024.11.0&quot;,&quot;token&quot;:&quot;9df249dd92624dde93c9a147cb9cfff0&quot;,&quot;r&quot;:1,&quot;server_timing&quot;:{&quot;name&quot;:{&quot;cfCacheStatus&quot;:true,&quot;cfEdge&quot;:true,&quot;cfExtPri&quot;:true,&quot;cfL4&quot;:true,&quot;cfOrigin&quot;:true,&quot;cfSpeedBrain&quot;:true},&quot;location_startswith&quot;:null}}" crossorigin="anonymous"></script>
+
+</body></html>
